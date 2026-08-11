@@ -22,7 +22,7 @@ class TodoDetailScreen extends StatelessWidget {
   Future<void> _edit(BuildContext context, Todo todo) async {
     final draft = await showTaskSheet(context, todo: todo);
     if (draft == null || draft.title.isEmpty) return;
-    store.update(todo, title: draft.title, subtaskTitles: draft.subtasks);
+    store.update(todo, title: draft.title, subtaskTitles: draft.subtasks, dueDate: draft.dueDate);
   }
 
   void _delete(BuildContext context, Todo todo) {
@@ -309,6 +309,23 @@ class _MetaCard extends StatelessWidget {
             label: 'Added',
             value: timeLabel(todo.createdAt),
           ),
+          if (todo.dueDate != null) ...[
+            const SizedBox(height: 12),
+            _MetaRow(
+              icon: Icons.calendar_today_rounded,
+              tint: todo.isOverdue
+                  ? AppColors.danger(isDark ? Brightness.dark : Brightness.light)
+                      .colors
+                      .first
+                  : (isDark ? AppColors.sand : AppColors.sage),
+              label: 'Due',
+              value: todo.isDueToday
+                  ? 'Today'
+                  : todo.isOverdue
+                      ? 'Overdue'
+                      : timeLabel(todo.dueDate!),
+            ),
+          ],
           const SizedBox(height: 12),
           _MetaRow(
             icon: Icons.flag_outlined,

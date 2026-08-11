@@ -180,6 +180,20 @@ class TodoTile extends StatelessWidget {
 
   String _caption() {
     if (todo.isCompleted) return 'Completed';
+    if (todo.isOverdue) {
+      if (todo.subtasks.isNotEmpty) {
+        final done = todo.subtasks.where((s) => s.isCompleted).length;
+        return 'Overdue · $done of ${todo.subtasks.length} subtasks';
+      }
+      return 'Overdue';
+    }
+    if (todo.dueDate != null) {
+      if (todo.subtasks.isNotEmpty) {
+        final done = todo.subtasks.where((s) => s.isCompleted).length;
+        return 'Due ${timeLabel(todo.dueDate!)} · $done of ${todo.subtasks.length}';
+      }
+      return 'Due ${timeLabel(todo.dueDate!)}';
+    }
     if (todo.subtasks.isEmpty) return timeLabel(todo.createdAt);
     final done = todo.subtasks.where((s) => s.isCompleted).length;
     return '$done of ${todo.subtasks.length} subtasks';

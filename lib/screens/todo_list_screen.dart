@@ -10,6 +10,7 @@ import '../widgets/progress_ring.dart';
 import '../widgets/settings_sheet.dart';
 import '../widgets/task_sheet.dart';
 import '../widgets/todo_tile.dart';
+import 'calendar_screen.dart';
 import 'todo_detail_screen.dart';
 
 class TodoListScreen extends StatefulWidget {
@@ -37,9 +38,9 @@ class _TodoListScreenState extends State<TodoListScreen> {
     final draft = await showTaskSheet(context, todo: todo);
     if (draft == null || draft.title.isEmpty || !mounted) return;
     if (todo == null) {
-      _store.add(draft.title, subtaskTitles: draft.subtasks);
+      _store.add(draft.title, subtaskTitles: draft.subtasks, dueDate: draft.dueDate);
     } else {
-      _store.update(todo, title: draft.title, subtaskTitles: draft.subtasks);
+      _store.update(todo, title: draft.title, subtaskTitles: draft.subtasks, dueDate: draft.dueDate);
     }
   }
 
@@ -48,6 +49,30 @@ class _TodoListScreenState extends State<TodoListScreen> {
       context,
       current: widget.themeMode,
       onChanged: widget.onThemeModeChanged,
+    );
+  }
+
+  void _openCalendar() {
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 320),
+        reverseTransitionDuration: const Duration(milliseconds: 240),
+        pageBuilder: (context, animation, secondaryAnimation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.04),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+            ),
+            child: CalendarScreen(store: _store),
+          ),
+        ),
+      ),
     );
   }
 
@@ -91,7 +116,10 @@ class _TodoListScreenState extends State<TodoListScreen> {
                   final todos = _store.filtered(_filter);
                   return Column(
                     children: [
-                      _Header(onSettings: _openSettings),
+                      _Header(
+                        onSettings: _openSettings,
+                        onCalendar: _openCalendar,
+                      ),
                       _ProgressCard(store: _store),
                       _FilterBar(
                         store: _store,
@@ -146,9 +174,10 @@ class _TodoListScreenState extends State<TodoListScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.onSettings});
+  const _Header({required this.onSettings, required this.onCalendar});
 
   final VoidCallback onSettings;
+  final VoidCallback onCalendar;
 
   @override
   Widget build(BuildContext context) {
@@ -210,6 +239,12 @@ class _Header extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            onPressed: onCalendar,
+            tooltip: 'Calendar',
+            icon: const Icon(Icons.calendar_month_rounded),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
           ),
           IconButton(
             onPressed: onSettings,
