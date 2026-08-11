@@ -28,7 +28,7 @@ jobs:
 
       - name: Setup Android SDK & CMake
         run: |
-          export PATH=${ANDROID_HOME}/cmdline-tools/latest/bin:${PATH}
+          export PATH=\${ANDROID_HOME}/cmdline-tools/latest/bin:\${PATH}
           sdkmanager --install "cmake;3.22.1"
           yes | sdkmanager --licenses
 
