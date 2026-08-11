@@ -15,10 +15,12 @@ import 'todo_detail_screen.dart';
 class TodoListScreen extends StatefulWidget {
   const TodoListScreen({
     super.key,
+    required this.store,
     required this.themeMode,
     required this.onThemeModeChanged,
   });
 
+  final TodoStore store;
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeModeChanged;
 
@@ -27,8 +29,9 @@ class TodoListScreen extends StatefulWidget {
 }
 
 class _TodoListScreenState extends State<TodoListScreen> {
-  final TodoStore _store = TodoStore();
   Filter _filter = Filter.all;
+
+  TodoStore get _store => widget.store;
 
   Future<void> _showTaskSheet({Todo? todo}) async {
     final draft = await showTaskSheet(context, todo: todo);
