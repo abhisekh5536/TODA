@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/todo.dart';
 
@@ -7,6 +8,9 @@ enum Filter { all, active, completed }
 class TodoStore extends ChangeNotifier {
   final List<Todo> _todos = [];
   int _idSeq = 0;
+  bool _loaded = false;
+
+  static const _storageKey = 'todo_app_todos';
 
   String _newId() => '${DateTime.now().microsecondsSinceEpoch}-${_idSeq++}';
 
@@ -30,6 +34,33 @@ class TodoStore extends ChangeNotifier {
     }
   }
 
+  /// Load todos from local storage. Call once at app startup.
+  Future<void> load() async {
+    if (_loaded) return;
+    _loaded = true;
+
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getString(_storageKey);
+    if (data != null && data.isNotEmpty) {
+      _todos.clear();
+      _todos.addAll(decodeTodos(data));
+      // Restore _idSeq to avoid ID collisions
+      for (final todo in _todos) {
+        for (final sub in todo.subtasks) {
+          _idSeq++;
+        }
+        _idSeq++;
+      }
+      notifyListeners();
+    }
+  }
+
+  /// Persist current todos to local storage.
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_storageKey, encodeTodos(_todos));
+  }
+
   void add(String title, {List<String> subtaskTitles = const []}) {
     _todos.add(
       Todo(
@@ -42,6 +73,7 @@ class TodoStore extends ChangeNotifier {
       ),
     );
     notifyListeners();
+    _save();
   }
 
   void update(Todo todo, {String? title, List<String>? subtaskTitles}) {
@@ -61,6 +93,7 @@ class TodoStore extends ChangeNotifier {
 
     _todos[index] = current.copyWith(title: title, subtasks: subtasks);
     notifyListeners();
+    _save();
   }
 
   void toggle(Todo todo) {
@@ -68,11 +101,13 @@ class TodoStore extends ChangeNotifier {
     if (index == -1) return;
     _todos[index] = todo.copyWith(isCompleted: !todo.isCompleted);
     notifyListeners();
+    _save();
   }
 
   void remove(String id) {
     _todos.removeWhere((t) => t.id == id);
     notifyListeners();
+    _save();
   }
 
   void addSubtask(String todoId, String title) {
@@ -80,6 +115,7 @@ class TodoStore extends ChangeNotifier {
     if (todo == null) return;
     todo.subtasks.add(Subtask(id: _newId(), title: title));
     notifyListeners();
+    _save();
   }
 
   void toggleSubtask(String todoId, String subtaskId) {
@@ -92,6 +128,7 @@ class TodoStore extends ChangeNotifier {
     );
     _syncSubtaskCompletion(todo);
     notifyListeners();
+    _save();
   }
 
   void removeSubtask(String todoId, String subtaskId) {
@@ -100,6 +137,7 @@ class TodoStore extends ChangeNotifier {
     todo.subtasks.removeWhere((s) => s.id == subtaskId);
     _syncSubtaskCompletion(todo);
     notifyListeners();
+    _save();
   }
 
   void _syncSubtaskCompletion(Todo todo) {
