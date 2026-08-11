@@ -132,7 +132,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             });
                           },
                           onPageChanged: (focused) {
-                            _focusedDay = focused;
+                            setState(() => _focusedDay = focused);
                           },
                           calendarBuilders: CalendarBuilders(
                             markerBuilder: (context, date, events) {
