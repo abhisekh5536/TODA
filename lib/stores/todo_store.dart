@@ -144,7 +144,10 @@ class TodoStore extends ChangeNotifier {
     if (todo.subtasks.isEmpty) return;
     final allDone = todo.subtasks.every((s) => s.isCompleted);
     if (allDone != todo.isCompleted) {
-      todo.isCompleted = allDone;
+      final index = _todos.indexWhere((t) => t.id == todo.id);
+      if (index != -1) {
+        _todos[index] = todo.copyWith(isCompleted: allDone);
+      }
     }
   }
 
