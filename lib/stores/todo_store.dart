@@ -37,6 +37,27 @@ class TodoStore extends ChangeNotifier {
     }
   }
 
+  /// Return todos whose dueDate falls on the given calendar day.
+  List<Todo> todosForDate(DateTime day) {
+    return _todos.where((t) {
+      if (t.dueDate == null) return false;
+      return t.dueDate!.year == day.year &&
+          t.dueDate!.month == day.month &&
+          t.dueDate!.day == day.day;
+    }).toList();
+  }
+
+  /// Return a map of date → task count for the given month (for calendar markers).
+  Map<DateTime, int> taskCountsForMonth(DateTime month) {
+    final map = <DateTime, int>{};
+    for (final todo in _todos) {
+      if (todo.dueDate == null) continue;
+      final key = DateTime(todo.dueDate!.year, todo.dueDate!.month, todo.dueDate!.day);
+      map[key] = (map[key] ?? 0) + 1;
+    }
+    return map;
+  }
+
   /// Load todos from local storage. Call once at app startup.
   Future<void> load() async {
     if (_loaded) return;
@@ -64,7 +85,11 @@ class TodoStore extends ChangeNotifier {
     await prefs.setString(_storageKey, encodeTodos(_todos));
   }
 
-  void add(String title, {List<String> subtaskTitles = const []}) {
+  void add(
+    String title, {
+    List<String> subtaskTitles = const [],
+    DateTime? dueDate,
+  }) {
     _todos.add(
       Todo(
         id: _newId(),
@@ -73,13 +98,19 @@ class TodoStore extends ChangeNotifier {
           for (final subtaskTitle in subtaskTitles)
             Subtask(id: _newId(), title: subtaskTitle),
         ],
+        dueDate: dueDate,
       ),
     );
     notifyListeners();
     _save();
   }
 
-  void update(Todo todo, {String? title, List<String>? subtaskTitles}) {
+  void update(
+    Todo todo, {
+    String? title,
+    List<String>? subtaskTitles,
+    DateTime? dueDate,
+  }) {
     final index = _indexOf(todo.id);
     if (index == -1) return;
     final current = _todos[index];
@@ -94,7 +125,11 @@ class TodoStore extends ChangeNotifier {
       ];
     }
 
-    _todos[index] = current.copyWith(title: title, subtasks: subtasks);
+    _todos[index] = current.copyWith(
+      title: title,
+      subtasks: subtasks,
+      dueDate: dueDate,
+    );
     notifyListeners();
     _save();
   }
@@ -176,4 +211,13 @@ class TodoStore extends ChangeNotifier {
   int get totalUnits => _todos.length + subtaskCount;
 
   int get completedUnits => completedCount + completedSubtaskCount;
+
+  /// Set or clear the due date for a specific todo.
+  void setDueDate(String todoId, DateTime? dueDate) {
+    final index = _indexOf(todoId);
+    if (index == -1) return;
+    _todos[index] = _todos[index].copyWith(dueDate: dueDate);
+    notifyListeners();
+    _save();
+  }
 }
