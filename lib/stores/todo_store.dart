@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/todo.dart';
 
@@ -7,6 +8,9 @@ enum Filter { all, active, completed }
 class TodoStore extends ChangeNotifier {
   final List<Todo> _todos = [];
   int _idSeq = 0;
+  bool _loaded = false;
+
+  static const _storageKey = 'todo_app_todos';
 
   String _newId() => '${DateTime.now().microsecondsSinceEpoch}-${_idSeq++}';
 
@@ -19,6 +23,9 @@ class TodoStore extends ChangeNotifier {
     return null;
   }
 
+  int _indexOf(String id) =>
+      _todos.indexWhere((t) => t.id == id);
+
   List<Todo> filtered(Filter filter) {
     switch (filter) {
       case Filter.all:
@@ -28,6 +35,33 @@ class TodoStore extends ChangeNotifier {
       case Filter.completed:
         return _todos.where((t) => t.isCompleted).toList();
     }
+  }
+
+  /// Load todos from local storage. Call once at app startup.
+  Future<void> load() async {
+    if (_loaded) return;
+    _loaded = true;
+
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getString(_storageKey);
+    if (data != null && data.isNotEmpty) {
+      _todos.clear();
+      _todos.addAll(decodeTodos(data));
+      // Restore _idSeq to avoid ID collisions
+      for (final todo in _todos) {
+        _idSeq++;
+        for (final sub in todo.subtasks) {
+          _idSeq++;
+        }
+      }
+      notifyListeners();
+    }
+  }
+
+  /// Persist current todos to local storage.
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_storageKey, encodeTodos(_todos));
   }
 
   void add(String title, {List<String> subtaskTitles = const []}) {
@@ -42,10 +76,11 @@ class TodoStore extends ChangeNotifier {
       ),
     );
     notifyListeners();
+    _save();
   }
 
   void update(Todo todo, {String? title, List<String>? subtaskTitles}) {
-    final index = _todos.indexWhere((t) => t.id == todo.id);
+    final index = _indexOf(todo.id);
     if (index == -1) return;
     final current = _todos[index];
 
@@ -61,52 +96,70 @@ class TodoStore extends ChangeNotifier {
 
     _todos[index] = current.copyWith(title: title, subtasks: subtasks);
     notifyListeners();
+    _save();
   }
 
   void toggle(Todo todo) {
-    final index = _todos.indexWhere((t) => t.id == todo.id);
+    final index = _indexOf(todo.id);
     if (index == -1) return;
     _todos[index] = todo.copyWith(isCompleted: !todo.isCompleted);
     notifyListeners();
+    _save();
   }
 
   void remove(String id) {
     _todos.removeWhere((t) => t.id == id);
     notifyListeners();
+    _save();
   }
 
   void addSubtask(String todoId, String title) {
-    final todo = byId(todoId);
-    if (todo == null) return;
-    todo.subtasks.add(Subtask(id: _newId(), title: title));
+    final index = _indexOf(todoId);
+    if (index == -1) return;
+    final current = _todos[index];
+    _todos[index] = current.copyWith(
+      subtasks: [
+        ...current.subtasks,
+        Subtask(id: _newId(), title: title),
+      ],
+    );
     notifyListeners();
+    _save();
   }
 
   void toggleSubtask(String todoId, String subtaskId) {
-    final todo = byId(todoId);
-    if (todo == null) return;
-    final index = todo.subtasks.indexWhere((s) => s.id == subtaskId);
+    final index = _indexOf(todoId);
     if (index == -1) return;
-    todo.subtasks[index] = todo.subtasks[index].copyWith(
-      isCompleted: !todo.subtasks[index].isCompleted,
-    );
-    _syncSubtaskCompletion(todo);
+    final todo = _todos[index];
+    final newSubtasks = todo.subtasks.map((s) {
+      if (s.id == subtaskId) return s.copyWith(isCompleted: !s.isCompleted);
+      return s;
+    }).toList();
+    _todos[index] = todo.copyWith(subtasks: newSubtasks);
+    _syncSubtaskCompletion(index);
     notifyListeners();
+    _save();
   }
 
   void removeSubtask(String todoId, String subtaskId) {
-    final todo = byId(todoId);
-    if (todo == null) return;
-    todo.subtasks.removeWhere((s) => s.id == subtaskId);
-    _syncSubtaskCompletion(todo);
+    final index = _indexOf(todoId);
+    if (index == -1) return;
+    final todo = _todos[index];
+    _todos[index] = todo.copyWith(
+      subtasks: todo.subtasks.where((s) => s.id != subtaskId).toList(),
+    );
+    _syncSubtaskCompletion(index);
     notifyListeners();
+    _save();
   }
 
-  void _syncSubtaskCompletion(Todo todo) {
+  /// Auto-sync parent todo isCompleted when all subtasks are done.
+  void _syncSubtaskCompletion(int todoIndex) {
+    final todo = _todos[todoIndex];
     if (todo.subtasks.isEmpty) return;
     final allDone = todo.subtasks.every((s) => s.isCompleted);
     if (allDone != todo.isCompleted) {
-      todo.isCompleted = allDone;
+      _todos[todoIndex] = todo.copyWith(isCompleted: allDone);
     }
   }
 

@@ -28,20 +28,10 @@ jobs:
 
       - name: Setup Android SDK & CMake
         run: |
-          ANDROID_SDK=$ANDROID_HOME
-          if [ -z "$ANDROID_HOME" ]; then
-            ANDROID_SDK=$HOME/Android/Sdk
-          fi
-          echo "Using SDK: $ANDROID_SDK"
-          ls $ANDROID_SDK/cmdline-tools/*/bin/sdkmanager 2>/dev/null || {
-            echo "Installing cmdline-tools"
-            mkdir -p $ANDROID_SDK/cmdline-tools
-            wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdtools.zip
-            unzip -q /tmp/cmdtools.zip -d $ANDROID_SDK/cmdline-tools
-            mv $ANDROID_SDK/cmdline-tools/cmdline-tools $ANDROID_SDK/cmdline-tools/latest
-          }
-          $ANDROID_SDK/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1"
-          yes | $ANDROID_SDK/cmdline-tools/latest/bin/sdkmanager --licenses
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+          sdkmanager --install "cmake;3.22.1"
+          yes | sdkmanager --licenses
 
       - name: Get dependencies
         run: flutter pub get
