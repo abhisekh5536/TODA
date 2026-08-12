@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'screens/splash_screen.dart';
 import 'screens/todo_list_screen.dart';
 import 'stores/todo_store.dart';
 import 'theme/app_theme.dart';
@@ -39,6 +40,8 @@ class _TodoAppState extends State<TodoApp> {
     }
 
     await _store.load();
+    // Small delay so the splash animation has time to play
+    await Future.delayed(const Duration(milliseconds: 1600));
     if (mounted) setState(() => _ready = true);
   }
 
@@ -54,16 +57,12 @@ class _TodoAppState extends State<TodoApp> {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: AppTheme.dark,
-        home: const Scaffold(
-          body: Center(
-            child: CircularProgressIndicator(),
-          ),
-        ),
+        home: const SplashScreen(),
       );
     }
 
     return MaterialApp(
-      title: 'Todo List',
+      title: 'TODA',
       debugShowCheckedModeBanner: false,
       scrollBehavior: AppTheme.scrollBehavior,
       theme: AppTheme.light,
