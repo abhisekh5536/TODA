@@ -45,7 +45,7 @@ class _TaskSheetState extends State<_TaskSheet> {
     super.initState();
     _isEdit = widget.todo != null;
     _controller = TextEditingController(text: widget.todo?.title ?? '');
-    _dueDate = widget.todo?.dueDate;
+    _dueDate = widget.todo?.dueDate ?? DateTime.now();
     _subControllers = [
       for (final subtask in widget.todo?.subtasks ?? const <Subtask>[])
         TextEditingController(text: subtask.title),
