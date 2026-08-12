@@ -40,8 +40,9 @@ class _TodoAppState extends State<TodoApp> {
     }
 
     await _store.load();
-    // Small delay so the splash animation has time to play
-    await Future.delayed(const Duration(milliseconds: 1600));
+    // Let the Flutter splash animation finish (title, checkmark, bar) before
+    // transitioning to the main app — keeps the experience seamless.
+    await Future.delayed(const Duration(milliseconds: 1800));
     if (mounted) setState(() => _ready = true);
   }
 
