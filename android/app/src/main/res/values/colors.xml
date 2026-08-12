@@ -1,3 +1,5 @@
 <resources>
     <color name="splash_background">#0F3040</color>
+    <color name="splash_orb_sand">#D99B7F</color>
+    <color name="splash_orb_terracotta">#A56F63</color>
 </resources>
