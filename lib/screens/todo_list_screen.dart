@@ -38,9 +38,22 @@ class _TodoListScreenState extends State<TodoListScreen> {
     final draft = await showTaskSheet(context, todo: todo);
     if (draft == null || draft.title.isEmpty || !mounted) return;
     if (todo == null) {
-      _store.add(draft.title, subtaskTitles: draft.subtasks, dueDate: draft.dueDate);
+      _store.add(
+        draft.title,
+        subtaskTitles: draft.subtasks,
+        dueDate: draft.dueDate,
+        dueTimeHour: draft.dueTimeHour,
+        dueTimeMinute: draft.dueTimeMinute,
+      );
     } else {
-      _store.update(todo, title: draft.title, subtaskTitles: draft.subtasks, dueDate: draft.dueDate);
+      _store.update(
+        todo,
+        title: draft.title,
+        subtaskTitles: draft.subtasks,
+        dueDate: draft.dueDate,
+        dueTimeHour: draft.dueTimeHour,
+        dueTimeMinute: draft.dueTimeMinute,
+      );
     }
   }
 

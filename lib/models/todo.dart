@@ -16,16 +16,16 @@ class Subtask {
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'title': title,
-    'isCompleted': isCompleted,
-  };
+        'id': id,
+        'title': title,
+        'isCompleted': isCompleted,
+      };
 
   factory Subtask.fromJson(Map<String, dynamic> json) => Subtask(
-    id: json['id'] as String,
-    title: json['title'] as String,
-    isCompleted: json['isCompleted'] as bool? ?? false,
-  );
+        id: json['id'] as String,
+        title: json['title'] as String,
+        isCompleted: json['isCompleted'] as bool? ?? false,
+      );
 }
 
 class Todo {
@@ -36,6 +36,9 @@ class Todo {
     DateTime? createdAt,
     this.subtasks = const [],
     this.dueDate,
+    this.dueTimeHour,
+    this.dueTimeMinute,
+    this.notificationId,
   }) : createdAt = createdAt ?? DateTime.now();
 
   final String id;
@@ -45,14 +48,42 @@ class Todo {
   final List<Subtask> subtasks;
 
   /// Optional due-date the user can assign.
-  /// Stored as an ISO-8601 date string (UTC midnight) or null.
   final DateTime? dueDate;
+
+  /// Optional due-time (hour in 24h format, 0-23).
+  final int? dueTimeHour;
+
+  /// Optional due-time (minute, 0-59).
+  final int? dueTimeMinute;
+
+  /// Scheduled notification ID for reminder (null if not scheduled).
+  final int? notificationId;
+
+  /// Whether this todo has a due time set.
+  bool get hasDueTime => dueTimeHour != null && dueTimeMinute != null;
+
+  /// The due DateTime combining dueDate + dueTime, or null.
+  DateTime? get dueDateTime {
+    if (dueDate == null || !hasDueTime) return null;
+    return DateTime(
+      dueDate!.year,
+      dueDate!.month,
+      dueDate!.day,
+      dueTimeHour!,
+      dueTimeMinute!,
+    );
+  }
 
   Todo copyWith({
     String? title,
     bool? isCompleted,
     List<Subtask>? subtasks,
     DateTime? dueDate,
+    int? dueTimeHour,
+    int? dueTimeMinute,
+    int? notificationId,
+    bool clearDueTime = false,
+    bool clearNotificationId = false,
   }) {
     return Todo(
       id: id,
@@ -61,6 +92,11 @@ class Todo {
       createdAt: createdAt,
       subtasks: subtasks ?? this.subtasks,
       dueDate: dueDate ?? this.dueDate,
+      dueTimeHour: clearDueTime ? null : (dueTimeHour ?? this.dueTimeHour),
+      dueTimeMinute:
+          clearDueTime ? null : (dueTimeMinute ?? this.dueTimeMinute),
+      notificationId:
+          clearNotificationId ? null : (notificationId ?? this.notificationId),
     );
   }
 
@@ -83,34 +119,40 @@ class Todo {
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'title': title,
-    'isCompleted': isCompleted,
-    'createdAt': createdAt.toIso8601String(),
-    'subtasks': subtasks.map((s) => s.toJson()).toList(),
-    if (dueDate != null)
-      'dueDate': DateTime(
-        dueDate!.year,
-        dueDate!.month,
-        dueDate!.day,
-      ).toIso8601String(),
-  };
+        'id': id,
+        'title': title,
+        'isCompleted': isCompleted,
+        'createdAt': createdAt.toIso8601String(),
+        'subtasks': subtasks.map((s) => s.toJson()).toList(),
+        if (dueDate != null)
+          'dueDate': DateTime(
+            dueDate!.year,
+            dueDate!.month,
+            dueDate!.day,
+          ).toIso8601String(),
+        if (dueTimeHour != null) 'dueTimeHour': dueTimeHour,
+        if (dueTimeMinute != null) 'dueTimeMinute': dueTimeMinute,
+        if (notificationId != null) 'notificationId': notificationId,
+      };
 
   factory Todo.fromJson(Map<String, dynamic> json) => Todo(
-    id: json['id'] as String,
-    title: json['title'] as String,
-    isCompleted: json['isCompleted'] as bool? ?? false,
-    createdAt: json['createdAt'] != null
-        ? DateTime.parse(json['createdAt'] as String)
-        : DateTime.now(),
-    subtasks: (json['subtasks'] as List<dynamic>?)
-            ?.map((s) => Subtask.fromJson(s as Map<String, dynamic>))
-            .toList() ??
-        [],
-    dueDate: json['dueDate'] != null
-        ? DateTime.parse(json['dueDate'] as String)
-        : null,
-  );
+        id: json['id'] as String,
+        title: json['title'] as String,
+        isCompleted: json['isCompleted'] as bool? ?? false,
+        createdAt: json['createdAt'] != null
+            ? DateTime.parse(json['createdAt'] as String)
+            : DateTime.now(),
+        subtasks: (json['subtasks'] as List<dynamic>?)
+                ?.map((s) => Subtask.fromJson(s as Map<String, dynamic>))
+                .toList() ??
+            [],
+        dueDate: json['dueDate'] != null
+            ? DateTime.parse(json['dueDate'] as String)
+            : null,
+        dueTimeHour: json['dueTimeHour'] as int?,
+        dueTimeMinute: json['dueTimeMinute'] as int?,
+        notificationId: json['notificationId'] as int?,
+      );
 }
 
 /// Helper to encode/decode the full todo list for storage.

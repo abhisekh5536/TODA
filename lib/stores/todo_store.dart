@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/todo.dart';
+import '../services/notification_service.dart';
 
 enum Filter { all, active, completed }
 
@@ -85,24 +86,52 @@ class TodoStore extends ChangeNotifier {
     await prefs.setString(_storageKey, encodeTodos(_todos));
   }
 
+  /// Schedule or cancel the reminder notification for a todo.
+  Future<void> _syncNotification(Todo todo) async {
+    // Cancel existing
+    await NotificationService.cancelReminder(todo.id);
+
+    // Schedule new if todo has both date + time and is not completed
+    if (todo.hasDueTime && todo.dueDate != null && !todo.isCompleted) {
+      final dueDt = todo.dueDateTime;
+      if (dueDt != null) {
+        final notifId = await NotificationService.scheduleReminder(
+          todoId: todo.id,
+          title: todo.title,
+          dueDateTime: dueDt,
+        );
+        // Update the todo with notification id
+        final index = _indexOf(todo.id);
+        if (index != -1 && notifId != null) {
+          _todos[index] = _todos[index].copyWith(notificationId: notifId);
+        }
+      }
+    }
+  }
+
   void add(
     String title, {
     List<String> subtaskTitles = const [],
     DateTime? dueDate,
+    int? dueTimeHour,
+    int? dueTimeMinute,
   }) {
-    _todos.add(
-      Todo(
-        id: _newId(),
-        title: title,
-        subtasks: [
-          for (final subtaskTitle in subtaskTitles)
-            Subtask(id: _newId(), title: subtaskTitle),
-        ],
-        dueDate: dueDate,
-      ),
+    final todo = Todo(
+      id: _newId(),
+      title: title,
+      subtasks: [
+        for (final subtaskTitle in subtaskTitles)
+          Subtask(id: _newId(), title: subtaskTitle),
+      ],
+      dueDate: dueDate,
+      dueTimeHour: dueTimeHour,
+      dueTimeMinute: dueTimeMinute,
     );
+    _todos.add(todo);
     notifyListeners();
     _save();
+    // Schedule notification after saving
+    _syncNotification(todo);
   }
 
   void update(
@@ -110,6 +139,9 @@ class TodoStore extends ChangeNotifier {
     String? title,
     List<String>? subtaskTitles,
     DateTime? dueDate,
+    int? dueTimeHour,
+    int? dueTimeMinute,
+    bool clearDueTime = false,
   }) {
     final index = _indexOf(todo.id);
     if (index == -1) return;
@@ -129,9 +161,14 @@ class TodoStore extends ChangeNotifier {
       title: title,
       subtasks: subtasks,
       dueDate: dueDate,
+      dueTimeHour: clearDueTime ? null : dueTimeHour,
+      dueTimeMinute: clearDueTime ? null : dueTimeMinute,
+      clearDueTime: clearDueTime,
     );
     notifyListeners();
     _save();
+    // Reschedule notification
+    _syncNotification(_todos[index]);
   }
 
   void toggle(Todo todo) {
@@ -140,12 +177,18 @@ class TodoStore extends ChangeNotifier {
     _todos[index] = todo.copyWith(isCompleted: !todo.isCompleted);
     notifyListeners();
     _save();
+    // Cancel reminder if marked complete
+    if (_todos[index].isCompleted) {
+      NotificationService.cancelReminder(todo.id);
+    }
   }
 
   void remove(String id) {
     _todos.removeWhere((t) => t.id == id);
     notifyListeners();
     _save();
+    // Cancel reminder
+    NotificationService.cancelReminder(id);
   }
 
   void addSubtask(String todoId, String title) {
@@ -195,6 +238,9 @@ class TodoStore extends ChangeNotifier {
     final allDone = todo.subtasks.every((s) => s.isCompleted);
     if (allDone != todo.isCompleted) {
       _todos[todoIndex] = todo.copyWith(isCompleted: allDone);
+      if (allDone) {
+        NotificationService.cancelReminder(todo.id);
+      }
     }
   }
 
@@ -219,5 +265,6 @@ class TodoStore extends ChangeNotifier {
     _todos[index] = _todos[index].copyWith(dueDate: dueDate);
     notifyListeners();
     _save();
+    _syncNotification(_todos[index]);
   }
 }
