@@ -24,7 +24,6 @@ class NotificationService {
     const ios = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
-      requestSound: true,
     );
     const settings = InitializationSettings(android: android, iOS: ios);
 
@@ -74,23 +73,19 @@ class NotificationService {
     return granted;
   }
 
-  /// Check (and request if needed) Android 12+ exact alarm permission.
-  static Future<bool> requestExactAlarmPermission() async {
+  /// Check Android 12+ exact alarm capability.
+  /// If the device cannot schedule exact alarms, log a warning.
+  static Future<bool> checkExactAlarmSupport() async {
     if (!Platform.isAndroid) return true;
 
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     if (android == null) return false;
 
-    // canScheduleExactNotifications returns true if permission is already granted
-    // or if the device doesn't need it.
-    final canSchedule = await android.canScheduleExactNotifications() ?? false;
-
+    final canSchedule = await android.canScheduleExactNotifications() ?? true;
     if (!canSchedule) {
-      debugPrint('[TODA] ⚠ Exact alarm permission NOT available, opening settings...');
-      await android.requestExactAlarmPermission();
+      debugPrint('[TODA] ⚠ Exact alarm not available — notifications may be inexact');
     }
-
     return canSchedule;
   }
 
