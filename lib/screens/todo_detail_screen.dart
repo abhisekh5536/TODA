@@ -22,7 +22,14 @@ class TodoDetailScreen extends StatelessWidget {
   Future<void> _edit(BuildContext context, Todo todo) async {
     final draft = await showTaskSheet(context, todo: todo);
     if (draft == null || draft.title.isEmpty) return;
-    store.update(todo, title: draft.title, subtaskTitles: draft.subtasks, dueDate: draft.dueDate);
+    store.update(
+      todo,
+      title: draft.title,
+      subtaskTitles: draft.subtasks,
+      dueDate: draft.dueDate,
+      dueTimeHour: draft.dueTimeHour,
+      dueTimeMinute: draft.dueTimeMinute,
+    );
   }
 
   void _delete(BuildContext context, Todo todo) {
@@ -279,6 +286,13 @@ class _MetaCard extends StatelessWidget {
 
   final Todo todo;
 
+  static String _fmtTime(int hour, int minute) {
+    final h12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    final m = minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    return '$h12:$m $period';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -324,6 +338,22 @@ class _MetaCard extends StatelessWidget {
                   : todo.isOverdue
                       ? 'Overdue'
                       : timeLabel(todo.dueDate!),
+            ),
+          ],
+          if (todo.hasDueTime) ...[
+            const SizedBox(height: 12),
+            _MetaRow(
+              icon: Icons.access_time_rounded,
+              tint: AppColors.gold,
+              label: 'Time',
+              value: _fmtTime(todo.dueTimeHour!, todo.dueTimeMinute!),
+            ),
+            const SizedBox(height: 12),
+            _MetaRow(
+              icon: Icons.notifications_active_rounded,
+              tint: AppColors.gold,
+              label: 'Reminder',
+              value: '10 min before',
             ),
           ],
           const SizedBox(height: 12),

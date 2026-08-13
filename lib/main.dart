@@ -3,11 +3,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/splash_screen.dart';
 import 'screens/todo_list_screen.dart';
+import 'services/notification_service.dart';
 import 'stores/todo_store.dart';
 import 'theme/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  NotificationService.init();
   runApp(const TodoApp());
 }
 
@@ -44,6 +46,9 @@ class _TodoAppState extends State<TodoApp> {
     // transitioning to the main app — keeps the experience seamless.
     await Future.delayed(const Duration(milliseconds: 1800));
     if (mounted) setState(() => _ready = true);
+
+    // Request notification permission after the app is visible
+    if (mounted) NotificationService.requestPermission();
   }
 
   Future<void> _setThemeMode(ThemeMode mode) async {

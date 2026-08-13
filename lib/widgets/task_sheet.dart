@@ -9,11 +9,15 @@ class TaskDraft {
     required this.title,
     required this.subtasks,
     this.dueDate,
+    this.dueTimeHour,
+    this.dueTimeMinute,
   });
 
   final String title;
   final List<String> subtasks;
   final DateTime? dueDate;
+  final int? dueTimeHour;
+  final int? dueTimeMinute;
 }
 
 Future<TaskDraft?> showTaskSheet(BuildContext context, {Todo? todo}) {
@@ -39,6 +43,8 @@ class _TaskSheetState extends State<_TaskSheet> {
   late final bool _isEdit;
   late final List<TextEditingController> _subControllers;
   DateTime? _dueDate;
+  int? _dueTimeHour;
+  int? _dueTimeMinute;
 
   @override
   void initState() {
@@ -46,6 +52,8 @@ class _TaskSheetState extends State<_TaskSheet> {
     _isEdit = widget.todo != null;
     _controller = TextEditingController(text: widget.todo?.title ?? '');
     _dueDate = widget.todo?.dueDate ?? DateTime.now();
+    _dueTimeHour = widget.todo?.dueTimeHour;
+    _dueTimeMinute = widget.todo?.dueTimeMinute;
     _subControllers = [
       for (final subtask in widget.todo?.subtasks ?? const <Subtask>[])
         TextEditingController(text: subtask.title),
@@ -79,6 +87,8 @@ class _TaskSheetState extends State<_TaskSheet> {
           if (controller.text.trim().isNotEmpty) controller.text.trim(),
       ],
       dueDate: _dueDate,
+      dueTimeHour: _dueTimeHour,
+      dueTimeMinute: _dueTimeMinute,
     );
   }
 
@@ -118,6 +128,46 @@ class _TaskSheetState extends State<_TaskSheet> {
 
   void _clearDate() {
     setState(() => _dueDate = null);
+  }
+
+  Future<void> _pickTime() async {
+    final now = DateTime.now();
+    final initialTime = _dueTimeHour != null
+        ? TimeOfDay(hour: _dueTimeHour!, minute: _dueTimeMinute!)
+        : TimeOfDay(hour: now.hour, minute: now.minute);
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+        return Theme(
+          data: theme.copyWith(
+            colorScheme: ColorScheme.dark(
+              primary: isDark ? AppColors.sand : AppColors.sage,
+              onPrimary: isDark ? const Color(0xFF3A1A0E) : Colors.white,
+              surface: isDark ? const Color(0xFF1A3A4A) : const Color(0xFFF7F4ED),
+              onSurface: isDark ? const Color(0xFFF4ECD1) : const Color(0xFF2C3525),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _dueTimeHour = picked.hour;
+        _dueTimeMinute = picked.minute;
+      });
+    }
+  }
+
+  void _clearTime() {
+    setState(() {
+      _dueTimeHour = null;
+      _dueTimeMinute = null;
+    });
   }
 
   @override
@@ -204,7 +254,7 @@ class _TaskSheetState extends State<_TaskSheet> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                // Due date picker
+                // ── Due date picker ──
                 Row(
                   children: [
                     Icon(
@@ -283,7 +333,134 @@ class _TaskSheetState extends State<_TaskSheet> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 18),
+                // ── Due time picker (optional) ──
+                Row(
+                  children: [
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 18,
+                      color: accent,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Reminder time',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (_dueTimeHour != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.gold.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.notifications_active_rounded,
+                              size: 12,
+                              color: AppColors.gold,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Reminder on',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.gold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (_dueTimeHour != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: accent.withValues(alpha: 0.4),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.access_time_rounded,
+                          size: 18,
+                          color: accent,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _timeLabel(_dueTimeHour!, _dueTimeMinute!),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.85),
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: _clearTime,
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 18,
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _pickTime,
+                    icon: const Icon(Icons.add_rounded, size: 16),
+                    label: Text(
+                      _dueTimeHour != null
+                          ? 'Change time'
+                          : 'Set reminder time (optional)',
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: accent,
+                      textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+                if (_dueTimeHour == null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'We\'ll notify you 10 minutes before the task is due.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.40,
+                        ),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 14),
+                // ── Subtasks ──
                 Row(
                   children: [
                     Icon(
@@ -375,6 +552,13 @@ class _TaskSheetState extends State<_TaskSheet> {
       return 'Tomorrow';
     }
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  String _timeLabel(int hour, int minute) {
+    final h12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    final m = minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    return '$h12:$m $period';
   }
 }
 
