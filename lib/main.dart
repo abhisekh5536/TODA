@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'models/todo.dart';
 import 'screens/splash_screen.dart';
 import 'screens/todo_list_screen.dart';
 import 'services/notification_service.dart';
 import 'stores/todo_store.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  NotificationService.init();
+  // MUST await — otherwise notification plugin won't be ready
+  await NotificationService.init();
   runApp(const TodoApp());
 }
 
@@ -47,8 +49,41 @@ class _TodoAppState extends State<TodoApp> {
     await Future.delayed(const Duration(milliseconds: 1800));
     if (mounted) setState(() => _ready = true);
 
-    // Request notification permission after the app is visible
-    if (mounted) NotificationService.requestPermission();
+    // Request notification & exact alarm permissions after UI is visible
+    if (mounted) {
+      await NotificationService.requestPermissions();
+      await NotificationService.requestExactAlarmPermission();
+
+      // Reschedule all pending reminders (they don't survive app restarts)
+      if (mounted) _rescheduleAllReminders();
+    }
+  }
+
+  /// Re-schedule reminders for all incomplete tasks that have a due time
+  /// in the future. Called once after app startup.
+  Future<void> _rescheduleAllReminders() async {
+    final todos = _store.todos;
+    int rescheduled = 0;
+
+    for (final todo in todos) {
+      if (!todo.hasDueTime || todo.isCompleted) continue;
+      final dueDt = todo.dueDateTime;
+      if (dueDt == null) continue;
+
+      final reminderTime = dueDt.subtract(const Duration(minutes: 10));
+      if (reminderTime.isAfter(DateTime.now())) {
+        await NotificationService.scheduleReminder(
+          todoId: todo.id,
+          title: todo.title,
+          dueDateTime: dueDt,
+        );
+        rescheduled++;
+      }
+    }
+
+    if (rescheduled > 0) {
+      debugPrint('[TODA] Rescheduled $rescheduled reminder(s) on startup');
+    }
   }
 
   Future<void> _setThemeMode(ThemeMode mode) async {
