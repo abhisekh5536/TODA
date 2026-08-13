@@ -13,7 +13,9 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
-  /// Must be called once in main() before runApp.
+  static bool _initialized = false;
+
+  /// Must be called once in main() — MUST be awaited.
   static Future<void> init() async {
     tz.initializeTimeZones();
     tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
@@ -22,7 +24,7 @@ class NotificationService {
     const ios = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
-      requestSoundPermission: true,
+      requestSound: true,
     );
     const settings = InitializationSettings(android: android, iOS: ios);
 
@@ -30,18 +32,66 @@ class NotificationService {
       settings,
       onDidReceiveNotificationResponse: _onTap,
     );
+
+    _initialized = true;
+    debugPrint('[TODA] NotificationService initialized');
   }
 
-  /// Request Android 13+ POST_NOTIFICATIONS permission.
-  /// Call once after the first frame renders.
-  static Future<bool> requestPermission() async {
+  /// Whether the service has been initialized.
+  static bool get isInitialized => _initialized;
+
+  /// Request all needed permissions.
+  /// Call once after the first frame renders (so the permission dialog has a UI).
+  static Future<bool> requestPermissions() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return true;
+
+    // iOS — handled by DarwinInitializationSettings requestAlertPermission etc.
+    if (Platform.isIOS) {
+      final ios = _plugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+      if (ios != null) {
+        await ios.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      }
+      return true;
+    }
+
+    // Android 13+ — POST_NOTIFICATIONS
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (android == null) return false;
+
+    final granted = await android.requestNotificationsPermission() ?? false;
+    debugPrint('[TODA] POST_NOTIFICATIONS granted: $granted');
+
+    if (!granted) {
+      debugPrint('[TODA] ⚠ Notification permission NOT granted — reminders won\'t work');
+    }
+
+    return granted;
+  }
+
+  /// Check (and request if needed) Android 12+ exact alarm permission.
+  static Future<bool> requestExactAlarmPermission() async {
     if (!Platform.isAndroid) return true;
 
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     if (android == null) return false;
 
-    return await android.requestNotificationsPermission() ?? false;
+    // canScheduleExactNotifications returns true if permission is already granted
+    // or if the device doesn't need it.
+    final canSchedule = await android.canScheduleExactNotifications() ?? false;
+
+    if (!canSchedule) {
+      debugPrint('[TODA] ⚠ Exact alarm permission NOT available, opening settings...');
+      await android.requestExactAlarmPermission();
+    }
+
+    return canSchedule;
   }
 
   /// Schedule a "10 minutes before" reminder for a task.
@@ -58,10 +108,15 @@ class NotificationService {
     final now = DateTime.now();
 
     // If the reminder time is in the past, skip scheduling
-    if (reminderTime.isBefore(now)) return null;
+    if (reminderTime.isBefore(now)) {
+      debugPrint('[TODA] Skipping notification for "$title" — reminder time is in the past');
+      return null;
+    }
 
     final local = tz.TZDateTime.from(reminderTime, tz.local);
     final notifId = todoId.hashCode.abs();
+
+    debugPrint('[TODA] Scheduling notification #$notifId for "$title" at $local');
 
     final androidDetails = AndroidNotificationDetails(
       'toda_reminders',           // channel id
@@ -81,6 +136,7 @@ class NotificationService {
       ),
       category: AndroidNotificationCategory.reminder,
       visibility: NotificationVisibility.public,
+      icon: '@mipmap/ic_launcher',
     );
 
     final iosDetails = DarwinNotificationDetails(
@@ -90,24 +146,31 @@ class NotificationService {
       subtitle: 'TODA',
     );
 
-    await _plugin.zonedSchedule(
-      notifId,
-      'Almost time!  ⏳',
-      _buildBody(title, dueDateTime),
-      local,
-      NotificationDetails(android: androidDetails, iOS: iosDetails),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      matchDateTimeComponents: null,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
+    try {
+      await _plugin.zonedSchedule(
+        notifId,
+        'Almost time!  ⏳',
+        _buildBody(title, dueDateTime),
+        local,
+        NotificationDetails(android: androidDetails, iOS: iosDetails),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        matchDateTimeComponents: null,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+      debugPrint('[TODA] ✅ Notification #$notifId scheduled successfully');
+    } catch (e) {
+      debugPrint('[TODA] ❌ Failed to schedule notification: $e');
+      return null;
+    }
 
     return notifId;
   }
 
   /// Cancel a scheduled reminder by todoId.
   static Future<void> cancelReminder(String todoId) async {
-    await _plugin.cancel(todoId.hashCode.abs());
+    final notifId = todoId.hashCode.abs();
+    await _plugin.cancel(notifId);
   }
 
   /// Cancel all pending notifications (e.g., on logout / clear data).
@@ -135,13 +198,13 @@ class NotificationService {
 
     String timeStr = '$hour12:$minute $period';
     if (dueDay == today) {
-      return 'Your task is due today at $timeStr:\n« $taskTitle »';
+      return 'Your task is due today at $timeStr:\n\u00AB $taskTitle \u00BB';
     }
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     final dateStr = '${months[dueDateTime.month - 1]} ${dueDateTime.day}';
-    return 'Your task is due $dateStr at $timeStr:\n« $taskTitle »';
+    return 'Your task is due $dateStr at $timeStr:\n\u00AB $taskTitle \u00BB';
   }
 }
