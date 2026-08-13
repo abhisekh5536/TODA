@@ -52,7 +52,7 @@ class _TodoAppState extends State<TodoApp> {
     // Request notification & exact alarm permissions after UI is visible
     if (mounted) {
       await NotificationService.requestPermissions();
-      await NotificationService.requestExactAlarmPermission();
+      await NotificationService.checkExactAlarmSupport();
 
       // Reschedule all pending reminders (they don't survive app restarts)
       if (mounted) _rescheduleAllReminders();
