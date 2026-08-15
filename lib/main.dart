@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'models/todo.dart';
 import 'screens/splash_screen.dart';
 import 'screens/todo_list_screen.dart';
 import 'services/notification_service.dart';
@@ -41,6 +41,15 @@ class _TodoAppState extends State<TodoApp> {
     final themeIndex = prefs.getInt(_themeKey);
     if (themeIndex != null && themeIndex >= 0 && themeIndex <= 1) {
       _mode = ThemeMode.values[themeIndex];
+    }
+
+    // Set the device's actual timezone for correct notification scheduling
+    try {
+      final timeZoneName = await FlutterTimezone.getLocalTimezone();
+      NotificationService.setTimezone(timeZoneName);
+      debugPrint('[TODA] Device timezone: $timeZoneName');
+    } catch (e) {
+      debugPrint('[TODA] Could not get device timezone: $e');
     }
 
     await _store.load();
