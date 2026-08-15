@@ -16,8 +16,10 @@ class NotificationService {
   static bool _initialized = false;
 
   /// Must be called once in main() — MUST be awaited.
+  /// Call [initWithTimezone] after this to set the correct device timezone.
   static Future<void> init() async {
     tz.initializeTimeZones();
+    // Default to Asia/Kolkata; will be overridden by initWithTimezone()
     tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -34,6 +36,20 @@ class NotificationService {
 
     _initialized = true;
     debugPrint('[TODA] NotificationService initialized');
+  }
+
+  /// Set the device's actual timezone. Call once after platform is ready.
+  /// Accepts a timezone name like 'Asia/Kolkata', 'America/New_York', etc.
+  static void setTimezone(String timezoneName) {
+    try {
+      final location = tz.getLocation(timezoneName);
+      tz.setLocalLocation(location);
+      debugPrint('[TODA] Timezone set to $timezoneName');
+    } catch (e) {
+      debugPrint('[TODA] Failed to set timezone $timezoneName: $e');
+      // Fall back to Asia/Kolkata
+      tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+    }
   }
 
   /// Whether the service has been initialized.
@@ -67,7 +83,8 @@ class NotificationService {
     debugPrint('[TODA] POST_NOTIFICATIONS granted: $granted');
 
     if (!granted) {
-      debugPrint('[TODA] ⚠ Notification permission NOT granted — reminders won\'t work');
+      debugPrint(
+          '[TODA] Notification permission NOT granted — reminders will not work');
     }
 
     return granted;
@@ -82,9 +99,11 @@ class NotificationService {
         AndroidFlutterLocalNotificationsPlugin>();
     if (android == null) return false;
 
-    final canSchedule = await android.canScheduleExactNotifications() ?? true;
+    final canSchedule =
+        await android.canScheduleExactNotifications() ?? true;
     if (!canSchedule) {
-      debugPrint('[TODA] ⚠ Exact alarm not available — notifications may be inexact');
+      debugPrint(
+          '[TODA] Exact alarm not available — notifications may be inexact');
     }
     return canSchedule;
   }
@@ -104,19 +123,22 @@ class NotificationService {
 
     // If the reminder time is in the past, skip scheduling
     if (reminderTime.isBefore(now)) {
-      debugPrint('[TODA] Skipping notification for "$title" — reminder time is in the past');
+      debugPrint(
+          '[TODA] Skipping notification for "$title" — reminder time is in the past');
       return null;
     }
 
-    final local = tz.TZDateTime.from(reminderTime, tz.local);
+    final scheduledDate = tz.TZDateTime.from(reminderTime, tz.local);
     final notifId = todoId.hashCode.abs();
 
-    debugPrint('[TODA] Scheduling notification #$notifId for "$title" at $local');
+    debugPrint(
+        '[TODA] Scheduling notification #$notifId for "$title" at $scheduledDate');
 
     final androidDetails = AndroidNotificationDetails(
-      'toda_reminders',           // channel id
-      'Task Reminders',           // channel name
-      channelDescription: 'Reminds you 10 minutes before a task is due',
+      'toda_reminders', // channel id
+      'Task Reminders', // channel name
+      channelDescription:
+          'Reminds you 10 minutes before a task is due',
       importance: Importance.high,
       priority: Priority.high,
       showWhen: true,
@@ -131,7 +153,6 @@ class NotificationService {
       ),
       category: AndroidNotificationCategory.reminder,
       visibility: NotificationVisibility.public,
-      icon: '@mipmap/ic_launcher',
     );
 
     final iosDetails = DarwinNotificationDetails(
@@ -141,25 +162,66 @@ class NotificationService {
       subtitle: 'TODA',
     );
 
+    // Use allowWhileIdle for reliability — fires even in Doze mode
+    final androidScheduleMode = await _resolveScheduleMode();
+
     try {
       await _plugin.zonedSchedule(
         notifId,
-        'Almost time!  ⏳',
+        'Almost time!',
         _buildBody(title, dueDateTime),
-        local,
+        scheduledDate,
         NotificationDetails(android: androidDetails, iOS: iosDetails),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        androidScheduleMode: androidScheduleMode,
         matchDateTimeComponents: null,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
-      debugPrint('[TODA] ✅ Notification #$notifId scheduled successfully');
+      debugPrint('[TODA] Notification #$notifId scheduled (mode: $androidScheduleMode)');
     } catch (e) {
-      debugPrint('[TODA] ❌ Failed to schedule notification: $e');
-      return null;
+      debugPrint('[TODA] Failed to schedule notification: $e');
+      // Fallback: try with inexact mode if exact fails (e.g. permission denied)
+      try {
+        await _plugin.zonedSchedule(
+          notifId,
+          'Almost time!',
+          _buildBody(title, dueDateTime),
+          scheduledDate,
+          NotificationDetails(android: androidDetails, iOS: iosDetails),
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          matchDateTimeComponents: null,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+        debugPrint('[TODA] Notification #$notifId scheduled (inexact fallback)');
+      } catch (e2) {
+        debugPrint('[TODA] Fallback also failed: $e2');
+        return null;
+      }
     }
 
     return notifId;
+  }
+
+  /// Determine the best schedule mode based on device capabilities.
+  static Future<AndroidScheduleMode> _resolveScheduleMode() async {
+    if (!Platform.isAndroid) {
+      return AndroidScheduleMode.inexactAllowWhileIdle;
+    }
+
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (android == null) {
+      return AndroidScheduleMode.inexactAllowWhileIdle;
+    }
+
+    final canExact = await android.canScheduleExactNotifications() ?? false;
+    if (canExact) {
+      return AndroidScheduleMode.allowWhileIdle;
+    }
+
+    debugPrint('[TODA] Exact alarm not permitted — using inexact mode');
+    return AndroidScheduleMode.inexactAllowWhileIdle;
   }
 
   /// Cancel a scheduled reminder by todoId.
@@ -189,7 +251,8 @@ class NotificationService {
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final dueDay = DateTime(dueDateTime.year, dueDateTime.month, dueDateTime.day);
+    final dueDay =
+        DateTime(dueDateTime.year, dueDateTime.month, dueDateTime.day);
 
     String timeStr = '$hour12:$minute $period';
     if (dueDay == today) {
