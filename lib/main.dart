@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/splash_screen.dart';
@@ -10,7 +9,6 @@ import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // MUST await — otherwise notification plugin won't be ready
   await NotificationService.init();
   runApp(const TodoApp());
 }
@@ -36,40 +34,22 @@ class _TodoAppState extends State<TodoApp> {
   }
 
   Future<void> _initStore() async {
-    // Load persisted theme mode
     final prefs = await SharedPreferences.getInstance();
     final themeIndex = prefs.getInt(_themeKey);
     if (themeIndex != null && themeIndex >= 0 && themeIndex <= 1) {
       _mode = ThemeMode.values[themeIndex];
     }
 
-    // Set the device's actual timezone for correct notification scheduling
-    try {
-      final timeZoneName = await FlutterTimezone.getLocalTimezone();
-      NotificationService.setTimezone(timeZoneName);
-      debugPrint('[TODA] Device timezone: $timeZoneName');
-    } catch (e) {
-      debugPrint('[TODA] Could not get device timezone: $e');
-    }
-
     await _store.load();
-    // Let the Flutter splash animation finish (title, checkmark, bar) before
-    // transitioning to the main app — keeps the experience seamless.
     await Future.delayed(const Duration(milliseconds: 1800));
     if (mounted) setState(() => _ready = true);
 
-    // Request notification & exact alarm permissions after UI is visible
     if (mounted) {
       await NotificationService.requestPermissions();
-      await NotificationService.checkExactAlarmSupport();
-
-      // Reschedule all pending reminders (they don't survive app restarts)
       if (mounted) _rescheduleAllReminders();
     }
   }
 
-  /// Re-schedule reminders for all incomplete tasks that have a due time
-  /// in the future. Called once after app startup.
   Future<void> _rescheduleAllReminders() async {
     final todos = _store.todos;
     int rescheduled = 0;
