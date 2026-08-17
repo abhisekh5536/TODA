@@ -155,15 +155,15 @@ class NotificationService {
     debugPrint('[TODA] POST_NOTIFICATIONS granted: $notifGranted');
 
     // 2. SCHEDULE_EXACT_ALARM / USE_EXACT_ALARM (Android 12+)
-    final canExact = await android.canScheduleExactAlarms() ?? false;
-    debugPrint('[TODA] canScheduleExactAlarms: $canExact');
+    final canExact = await android.canScheduleExactNotifications() ?? false;
+    debugPrint('[TODA] canScheduleExactNotifications: $canExact');
 
     if (!canExact) {
       // On API 33+ this shows a system dialog.
       // On API 31 the user must grant it manually via Settings.
       final requested =
           await android.requestExactAlarmsPermission() ?? false;
-      final canNow = await android.canScheduleExactAlarms() ?? false;
+      final canNow = await android.canScheduleExactNotifications() ?? false;
       debugPrint(
           '[TODA] requestExactAlarmsPermission returned $requested, '
           'now canSchedule=$canNow');
@@ -184,7 +184,7 @@ class NotificationService {
     if (!Platform.isAndroid) return true;
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
-    return (await android?.canScheduleExactAlarms()) ?? false;
+    return (await android?.canScheduleExactNotifications()) ?? false;
   }
 
   // ── Scheduling ────────────────────────────────────────────────────────
@@ -408,16 +408,18 @@ class NotificationService {
   static Future<void> cancelAll() async {
     await _plugin.cancelAll();
 
+    // Cancel all exact alarms by iterating stored IDs.
     if (Platform.isAndroid) {
-      await AndroidAlarmManager.cancelAll();
-    }
-
-    // Clean up all persisted payloads.
-    final prefs = await SharedPreferences.getInstance();
-    final keys =
-        prefs.getKeys().where((k) => k.startsWith(_kAlarmDataPrefix));
-    for (final key in keys) {
-      await prefs.remove(key);
+      final prefs = await SharedPreferences.getInstance();
+      final keys =
+          prefs.getKeys().where((k) => k.startsWith(_kAlarmDataPrefix));
+      for (final key in keys) {
+        final id = int.tryParse(key.substring(_kAlarmDataPrefix.length));
+        if (id != null) {
+          await AndroidAlarmManager.cancel(id);
+        }
+        await prefs.remove(key);
+      }
     }
   }
 
